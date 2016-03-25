@@ -3,10 +3,10 @@ import json
 
 from django import forms
 from django.contrib import admin
-from django.contrib.auth.models import User
 
 from drip.models import Drip, SentDrip, QuerySetRule
 from drip.drips import configured_message_classes, message_class_for
+from drip.utils import get_user_model
 
 
 class QuerySetRuleInline(admin.TabularInline):
@@ -19,8 +19,7 @@ class DripForm(forms.ModelForm):
     )
     class Meta:
         model = Drip
-        fields = "__all__"
-
+        exclude = []
 
 class DripAdmin(admin.ModelAdmin):
     list_display = ('name', 'enabled', 'message_class')
@@ -41,6 +40,7 @@ class DripAdmin(admin.ModelAdmin):
         shifted_drips = []
         seen_users = set()
         for shifted_drip in drip.drip.walk(into_past=int(into_past), into_future=int(into_future)+1):
+            shifted_drip.prune()
             shifted_drips.append({
                 'drip': shifted_drip,
                 'qs': shifted_drip.get_queryset().exclude(id__in=seen_users)
@@ -53,19 +53,27 @@ class DripAdmin(admin.ModelAdmin):
         from django.shortcuts import render, get_object_or_404
         from django.http import HttpResponse
         drip = get_object_or_404(Drip, id=drip_id)
+        User = get_user_model()
         user = get_object_or_404(User, id=user_id)
+
         drip_message = message_class_for(drip.message_class)(drip.drip, user)
-
         html = ''
-        for body, mime in drip_message.message.alternatives:
-            if mime == 'text/html':
-                html = body
+        mime = ''
+        if drip_message.message.alternatives:
+            for body, mime in drip_message.message.alternatives:
+                if mime == 'text/html':
+                    html = body
+                    mime = 'text/html'
+        else:
+            html = drip_message.message.body
+            mime = 'text/plain'
 
-        return HttpResponse(html)
+        return HttpResponse(html, content_type=mime)
 
     def build_extra_context(self, extra_context):
         from drip.utils import get_simple_fields
         extra_context = extra_context or {}
+        User = get_user_model()
         extra_context['field_data'] = json.dumps(get_simple_fields(User))
         return extra_context
 
@@ -78,7 +86,7 @@ class DripAdmin(admin.ModelAdmin):
             request, object_id, extra_context=self.build_extra_context(extra_context))
 
     def get_urls(self):
-        from django.conf.urls.defaults import patterns, url
+        from django.conf.urls import patterns, url
         urls = super(DripAdmin, self).get_urls()
         my_urls = patterns('',
             url(

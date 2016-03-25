@@ -1,5 +1,5 @@
-from itertools import groupby
 import operator
+import functools
 
 try:
     from importlib import import_module
@@ -7,20 +7,22 @@ except ImportError:
     from django.utils.importlib import import_module
 
 from django.conf import settings
-from django.contrib.auth.models import User
-from django.db import models
+from django.db.models import Q
 from django.template import Context, Template
 from django.core.mail import EmailMultiAlternatives
 from django.utils.html import strip_tags
 
-
 from drip.models import SentDrip
+from drip.utils import get_user_model
 
 try:
     from django.utils.timezone import now as conditional_now
 except ImportError:
     from datetime import datetime
     conditional_now = datetime.now
+
+
+import logging
 
 
 def configured_message_classes():
@@ -171,12 +173,12 @@ class DripBase(object):
             clause = clauses.get(rule.method_type, clauses['filter'])
 
             kwargs = rule.filter_kwargs(qs, now=self.now)
-            clause.append(models.Q(**kwargs))
+            clause.append(Q(**kwargs))
 
             qs = rule.apply_any_annotation(qs)
 
         if clauses['exclude']:
-            qs = qs.exclude(reduce(operator.or_, clauses['exclude']))
+            qs = qs.exclude(functools.reduce(operator.or_, clauses['exclude']))
         qs = qs.filter(*clauses['filter'])
 
         return qs
@@ -232,17 +234,20 @@ class DripBase(object):
         count = 0
         for user in self.get_queryset():
             message_instance = MessageClass(self, user)
-            result = message_instance.message.send()
-            if result:
-                SentDrip.objects.create(
-                    drip=self.drip_model,
-                    user=user,
-                    from_email=self.from_email,
-                    from_email_name=self.from_email_name,
-                    subject=message_instance.subject,
-                    body=message_instance.body
-                )
-                count += 1
+            try:
+                result = message_instance.message.send()
+                if result:
+                    SentDrip.objects.create(
+                        drip=self.drip_model,
+                        user=user,
+                        from_email=self.from_email,
+                        from_email_name=self.from_email_name,
+                        subject=message_instance.subject,
+                        body=message_instance.body
+                    )
+                    count += 1
+            except Exception as e:
+                logging.error("Failed to send drip %s to user %s: %s" % (self.drip_model.id, user, e))
 
         return count
 
@@ -259,4 +264,5 @@ class DripBase(object):
         Alternatively, you could create Drips on the fly
         using a queryset builder from the admin interface...
         """
+        User = get_user_model()
         return User.objects
