@@ -1,11 +1,15 @@
 from itertools import groupby
 import operator
 
+try:
+    from importlib import import_module
+except ImportError:
+    from django.utils.importlib import import_module
+
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import models
 from django.template import Context, Template
-from django.utils.importlib import import_module
 from django.core.mail import EmailMultiAlternatives
 from django.utils.html import strip_tags
 
