@@ -19,6 +19,7 @@ class DripForm(forms.ModelForm):
     )
     class Meta:
         model = Drip
+        fields = "__all__"
 
 
 class DripAdmin(admin.ModelAdmin):
