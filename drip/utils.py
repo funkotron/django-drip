@@ -2,7 +2,10 @@ import sys
 
 from django.db import models
 from django.db.models import ForeignKey, OneToOneField, ManyToManyField
-from django.db.models.related import RelatedObject
+try:
+    from django.db.models.fields.related import ManyToOneRel
+except ImportError:
+    from django.db.models.related import RelatedObject as ManyToOneRel
 
 # taking a nod from python-requests and skipping six
 _ver = sys.version_info
@@ -25,7 +28,7 @@ def get_fields(Model,
     """
     Given a Model, return a list of lists of strings with important stuff:
     ...
-    ['test_user__user__customuser', 'customuser', 'User', 'RelatedObject']
+    ['test_user__user__customuser', 'customuser', 'User', 'ManyToOneRel']
     ['test_user__unique_id', 'unique_id', 'TestUser', 'CharField']
     ['test_user__confirmed', 'confirmed', 'TestUser', 'BooleanField']
     ...
@@ -41,7 +44,7 @@ def get_fields(Model,
         app_label, model_name = Model.split('.')
         Model = models.get_model(app_label, model_name)
 
-    fields = Model._meta.fields + Model._meta.many_to_many + Model._meta.get_all_related_objects()
+    fields = Model._meta.fields + Model._meta.many_to_many + tuple(Model._meta.get_all_related_objects())
     model_stack.append(Model)
 
     # do a variety of checks to ensure recursion isnt being redundant
@@ -66,7 +69,7 @@ def get_fields(Model,
     for field in fields:
         field_name = field.name
 
-        if isinstance(field, RelatedObject):
+        if isinstance(field, ManyToOneRel):
             field_name = field.field.related_query_name()
 
         if parent_field:
@@ -82,13 +85,17 @@ def get_fields(Model,
 
         if not stop_recursion and \
                 (isinstance(field, ForeignKey) or isinstance(field, OneToOneField) or \
-                isinstance(field, RelatedObject) or isinstance(field, ManyToManyField)):
+                isinstance(field, ManyToOneRel) or isinstance(field, ManyToManyField)):
 
-            if isinstance(field, RelatedObject):
+            if isinstance(field, ManyToOneRel):
                 RelModel = field.model
                 #field_names.extend(get_fields(RelModel, full_field, True))
             else:
-                RelModel = field.related.parent_model
+                try:
+                    # django 1.9 behaviour
+                    RelModel = field.related.model
+                except AttributeError:
+                    RelModel = field.related.parent_model
 
             out_fields.extend(get_fields(RelModel, full_field, list(model_stack)))
 
