@@ -72,6 +72,10 @@ class DripMessage(object):
         return self._subject
 
     @property
+    def reply_to(self):
+        return self.drip_base.reply_to
+
+    @property
     def body(self):
         if not self._body:
             self._body = Template(self.drip_base.body_template).render(self.context)
@@ -94,6 +98,9 @@ class DripMessage(object):
             self._message = EmailMultiAlternatives(
                 self.subject, self.plain, from_, [self.user.email])
 
+            if self.reply_to:
+                self._message.reply_to=[self.reply_to]
+
             # check if there are html tags in the rendered template
             if len(self.plain) != len(self.body):
                 self._message.attach_alternative(self.body, 'text/html')
@@ -113,6 +120,7 @@ class DripBase(object):
     body_template = None
     from_email = None
     from_email_name = None
+    reply_to = None
 
     def __init__(self, drip_model, *args, **kwargs):
         self.drip_model = drip_model
@@ -120,6 +128,7 @@ class DripBase(object):
         self.name = kwargs.pop('name', self.name)
         self.from_email = kwargs.pop('from_email', self.from_email)
         self.from_email_name = kwargs.pop('from_email_name', self.from_email_name)
+        self.reply_to = kwargs.pop('reply_to', self.reply_to)
         self.subject_template = kwargs.pop('subject_template', self.subject_template)
         self.body_template = kwargs.pop('body_template', self.body_template)
 
@@ -242,6 +251,7 @@ class DripBase(object):
                         user=user,
                         from_email=self.from_email,
                         from_email_name=self.from_email_name,
+                        reply_to=self.reply_to,
                         subject=message_instance.subject,
                         body=message_instance.body
                     )
