@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.utils.dateparse import parse_duration
+from django.utils import timezone
 
 from drip.utils import get_user_model
 
@@ -54,8 +55,8 @@ class SentDrip(models.Model):
     """
     date = models.DateTimeField(auto_now_add=True)
 
-    drip = models.ForeignKey('drip.Drip', related_name='sent_drips')
-    user = models.ForeignKey(getattr(settings, 'AUTH_USER_MODEL', 'auth.User'), related_name='sent_drips')
+    drip = models.ForeignKey(Drip, related_name='sent_drips', on_delete=models.CASCADE)
+    user = models.ForeignKey(getattr(settings, 'AUTH_USER_MODEL', 'auth.User'), related_name='sent_drips', on_delete=models.CASCADE)
 
     subject = models.TextField()
     body = models.TextField()
@@ -91,7 +92,7 @@ class QuerySetRule(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     lastchanged = models.DateTimeField(auto_now=True)
 
-    drip = models.ForeignKey(Drip, related_name='queryset_rules')
+    drip = models.ForeignKey(Drip, related_name='queryset_rules', on_delete=models.CASCADE)
 
     method_type = models.CharField(max_length=12, default='filter', choices=METHOD_TYPES)
     field_name = models.CharField(max_length=128, verbose_name='Field name of User')
@@ -125,25 +126,29 @@ class QuerySetRule(models.Model):
             qs = qs.annotate(**{field_name: models.Count(agg, distinct=True)})
         return qs
 
-    def filter_kwargs(self, qs, now=datetime.now):
+    def parse_duration(self, value):
+        duration = parse_duration(value)
+        if duration is None:
+            if not ',' in value:
+                # django parse_duration requires 'x days, S'
+                duration = parse_duration(value + ', 0')
+                if duration is None:
+                    raise ValueError("Could not parse %s" % value)
+        return duration
+
+    def filter_kwargs(self, qs, now=timezone.now):
         # Support Count() as m2m__count
         field_name = self.annotated_field_name
         field_name = '__'.join([field_name, self.lookup_type])
         field_value = self.field_value
 
         # set time deltas and dates
-        if self.field_value.startswith('now-'):
-            field_value = self.field_value.replace('now-', '')
-            field_value = now() - parse_duration(field_value)
-        elif self.field_value.startswith('now+'):
-            field_value = self.field_value.replace('now+', '')
-            field_value = now() + parse_duration(field_value)
-        elif self.field_value.startswith('today-'):
-            field_value = self.field_value.replace('today-', '')
-            field_value = now().date() - parse_duration(field_value)
-        elif self.field_value.startswith('today+'):
-            field_value = self.field_value.replace('today+', '')
-            field_value = now().date() + parse_duration(field_value)
+        if self.field_value.startswith('now'):
+            field_value = self.field_value.replace('now', '')
+            field_value = now() + self.parse_duration(field_value)
+        elif self.field_value.startswith('today'):
+            field_value = self.field_value.replace('today', '')
+            field_value = now().date() - self.parse_duration(field_value)
 
         # F expressions
         if self.field_value.startswith('F_'):
@@ -160,7 +165,7 @@ class QuerySetRule(models.Model):
 
         return kwargs
 
-    def apply(self, qs, now=datetime.now):
+    def apply(self, qs, now=timezone.now):
 
         kwargs = self.filter_kwargs(qs, now)
         qs = self.apply_any_annotation(qs)

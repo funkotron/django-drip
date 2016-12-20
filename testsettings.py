@@ -37,6 +37,8 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
 
+
+
 USE_TZ = True
 TIME_ZONE = 'UTC'
 
@@ -46,3 +48,11 @@ ROOT_URLCONF = 'test_urls'
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = ()
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'APP_DIRS': True,
+    },
+]
+

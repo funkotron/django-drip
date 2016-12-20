@@ -1,9 +1,9 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from django.test import TestCase
 from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
-from django.core.urlresolvers import resolve, reverse
+from django.urls import resolve, reverse
 from django.core import mail
 from django.conf import settings
 from django.utils import timezone
@@ -243,7 +243,7 @@ class DripsTestCase(TestCase):
             drip=model_drip,
             field_name='date_joined',
             lookup_type='lte',
-            field_value=(timezone.now() - timedelta(days=8)).strftime('%Y-%m-%d %H:%M:%S')
+            field_value=(timezone.now() - timedelta(days=8)).isoformat()
         )
         drip = model_drip.drip
 
@@ -260,7 +260,9 @@ class DripsTestCase(TestCase):
             drip=model_drip,
             field_name='date_joined',
             lookup_type='gte',
-            field_value=(timezone.now() - timedelta(days=1)).strftime('%Y-%m-%d 00:00:00')
+            field_value=(timezone.now() - timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ).isoformat()
         )
         drip = model_drip.drip
 
@@ -285,7 +287,7 @@ class DripsTestCase(TestCase):
             drip=model_drip,
             field_name='date_joined',
             lookup_type='gte',
-            field_value=(timezone.now() - timedelta(days=1)).strftime('%Y-%m-%d 00:00:00')
+            field_value=(timezone.now() - timedelta(days=1)).isoformat()
         )
 
         # then get it's admin view.
@@ -378,7 +380,7 @@ class DripsTestCase(TestCase):
 
         qs = qsr.apply_any_annotation(model_drip.drip.get_queryset())
 
-        self.assertEqual(list(qs.query.aggregate_select.keys()), ['num_profile_user_groups'])
+        self.assertEqual(list(qs.query.annotation_select.keys()), ['num_profile_user_groups'])
 
     def test_apply_multiple_rules_with_aggregation(self):
 
@@ -399,14 +401,16 @@ class DripsTestCase(TestCase):
             drip=model_drip,
             field_name='date_joined',
             lookup_type='gte',
-            field_value=(timezone.now() - timedelta(days=1)).strftime('%Y-%m-%d 00:00:00')
+            field_value=(timezone.now() - timedelta(days=1)).isoformat()
         )
 
 
         qsr.clean()
         qs = model_drip.drip.apply_queryset_rules(model_drip.drip.get_queryset())
 
-        self.assertEqual(qs.count(), 4)
+        self.assertEqual(qs.count(), self.User.objects.filter(
+            date_joined__gte=timezone.now() - timedelta(days=1)
+        ).count())
 
 
 # Used by CustomMessagesTest
