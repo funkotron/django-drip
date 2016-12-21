@@ -127,6 +127,7 @@ class QuerySetRule(models.Model):
         return qs
 
     def parse_duration(self, value):
+        value = value.lstrip('+')
         duration = parse_duration(value)
         if duration is None:
             if not ',' in value:

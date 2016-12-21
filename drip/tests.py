@@ -27,6 +27,10 @@ class RulesTestCase(TestCase):
         rule = QuerySetRule(drip=self.drip, field_name='date_joined', lookup_type='lte', field_value='now-60 days')
         rule.clean()
 
+    def test_positive_days(self):
+        rule = QuerySetRule(drip=self.drip, field_name='date_joined', lookup_type='lte', field_value='now+60 days')
+        rule.clean()
+
     def test_bad_field_name(self):
         rule = QuerySetRule(drip=self.drip, field_name='date__joined', lookup_type='lte', field_value='now-60 days')
         self.assertRaises(ValidationError, rule.clean)
