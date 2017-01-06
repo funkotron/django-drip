@@ -123,10 +123,15 @@ class DripsTestCase(TestCase):
     ##################
 
     def test_backwards_drip_class(self):
+        Drip.objects.create(
+            name='A Custom Week Ago',
+            subject_template='HELLO {{ user.username }}',
+            body_html_template='KETTEHS ROCK!'
+        )
         for drip in Drip.objects.all():
             self.assertTrue(issubclass(drip.drip.__class__, DripBase))
 
-    def build_joined_date_drip(self, shift_one=7, shift_two=8):
+    def build_joined_date_drip(self, shift_one=7, shift_two=8, when='now'):
         model_drip = Drip.objects.create(
             name='A Custom Week Ago',
             subject_template='HELLO {{ user.username }}',
@@ -136,13 +141,13 @@ class DripsTestCase(TestCase):
             drip=model_drip,
             field_name='date_joined',
             lookup_type='lt',
-            field_value='now-{0} days'.format(shift_one)
+            field_value='{0}-{1} days'.format(when, shift_one)
         )
         QuerySetRule.objects.create(
             drip=model_drip,
             field_name='date_joined',
             lookup_type='gte',
-            field_value='now-{0} days'.format(shift_two)
+            field_value='{0}-{1} days'.format(when, shift_two)
         )
         return model_drip
 
@@ -172,6 +177,31 @@ class DripsTestCase(TestCase):
         self.assertEqual(2, drip.get_queryset().count()) # 2 people meet the criteria
         drip.prune()
         self.assertEqual(0, drip.get_queryset().count()) # everyone is pruned
+
+    def test_today_drip(self):
+        model_drip = self.build_joined_date_drip(when='today')
+        drip = model_drip.drip
+
+        # ensure we are starting from a blank slate
+        self.assertEqual(2, drip.get_queryset().count()) # 2 people meet the criteria
+        drip.prune()
+        self.assertEqual(2, drip.get_queryset().count()) # no one is pruned, never sent before
+        self.assertEqual(0, SentDrip.objects.count()) # confirm nothing sent before
+
+        # send the drip
+        drip.send()
+        self.assertEqual(2, SentDrip.objects.count()) # got sent
+
+        for sent in SentDrip.objects.all():
+            self.assertIn('HELLO', sent.subject)
+            self.assertIn('KETTEHS ROCK', sent.body)
+
+        # subsequent runs reflect previous activity
+        drip = Drip.objects.get(id=model_drip.id).drip
+        self.assertEqual(2, drip.get_queryset().count()) # 2 people meet the criteria
+        drip.prune()
+        self.assertEqual(0, drip.get_queryset().count()) # everyone is pruned
+
 
     def test_custom_short_term_drip(self):
         model_drip = self.build_joined_date_drip(shift_one=3, shift_two=4)

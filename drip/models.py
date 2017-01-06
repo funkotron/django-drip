@@ -149,7 +149,7 @@ class QuerySetRule(models.Model):
             field_value = now() + self.parse_duration(field_value)
         elif self.field_value.startswith('today'):
             field_value = self.field_value.replace('today', '')
-            field_value = now().date() - self.parse_duration(field_value)
+            field_value = now().date() + self.parse_duration(field_value)
 
         # F expressions
         if self.field_value.startswith('F_'):
