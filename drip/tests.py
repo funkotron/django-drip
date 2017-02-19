@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
@@ -12,7 +13,7 @@ from drip.models import Drip, SentDrip, QuerySetRule
 from drip.drips import DripBase, DripMessage
 from drip.utils import get_user_model, unicode
 
-from credits.models import Profile
+from credits.models import Profile, Account
 
 
 class RulesTestCase(TestCase):
@@ -241,6 +242,30 @@ class DripsTestCase(TestCase):
 
         for count, shifted_drip in zip([0, 1, 1, 1, 1], drip.walk(into_past=3, into_future=2)):
             self.assertEqual(count, shifted_drip.get_queryset().count())
+
+    def test_filter_by_self(self):
+        """
+        Everyone belongs to the same account. filter to email just the owner.
+        """
+        account = Account.objects.create(
+            owner=User.objects.earliest('date_joined')
+        )
+        Profile.objects.update(account=account)
+
+        model_drip = Drip.objects.create(
+            name='A Custom Week Ago',
+            subject_template='HELLO {{ user.username }}',
+            body_html_template='KETTEHS ROCK!'
+        )
+
+        QuerySetRule.objects.create(
+            drip=model_drip,
+            field_name='profile__account__owner_id',
+            lookup_type='exact',
+            field_value='F_id'
+        )
+
+        self.assertEqual(1, model_drip.drip.get_queryset().count())
 
     def test_exclude_and_include(self):
         model_drip = Drip.objects.create(
