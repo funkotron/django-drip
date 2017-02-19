@@ -265,6 +265,13 @@ class DripsTestCase(TestCase):
             field_value='F_id'
         )
 
+        QuerySetRule.objects.create(
+            drip=model_drip,
+            field_name='profile__account__owner_id',
+            lookup_type='exact',
+            field_value='F_id'
+        )
+
         self.assertEqual(1, model_drip.drip.get_queryset().count())
 
     def test_exclude_and_include(self):
